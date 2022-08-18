@@ -1,0 +1,66 @@
+library(tidyverse)
+library(SnowballC)
+library(tm)
+df<-read.csv("Sentiment.csv")
+summary(df)
+head(df)
+df<-df[c(16,6)]
+head(df)
+str(df)
+round(prop.table(table(df$sentiment)),2)
+corpus <- VCorpus(VectorSource(df$text))
+as.character(corpus[[1]])
+corpus <- tm_map(corpus, content_transformer(tolower))
+corpus <- tm_map(corpus, removeNumbers)
+corpus <- tm_map(corpus, removePunctuation)
+corpus <- tm_map(corpus, removeWords, stopwords("english"))
+corpus <- tm_map(corpus, stemDocument)
+corpus <- tm_map(corpus, stripWhitespace)
+as.character(corpus[[1]])
+dtm <- DocumentTermMatrix(corpus)
+dtm
+dim(dtm)
+dtm <- removeSparseTerms(dtm, 0.999)
+dim(dtm)
+inspect(dtm[0:10, 1:15])
+freq<- sort(colSums(as.matrix(dtm)), decreasing=TRUE)
+findFreqTerms(dtm, lowfreq=60)
+library(ggplot2)
+wf<- data.frame(word=names(freq), freq=freq)
+head(wf)
+
+
+library("wordcloud")
+positive <- subset(df,sentiment=="Positive")
+head(positive)
+wordcloud(positive$text, max.words = 100, scale = c(3,0.5))
+negative <- subset(df,sentiment=="Negative")
+head(negative)
+wordcloud(negative$text, max.words = 100, scale = c(3,0.5))
+neutral <- subset(df,sentiment=="Neutral")
+head(neutral)
+wordcloud(neutral$text, max.words = 100, scale = c(3,0.5))
+convert_count <- function(x) {
+  y <- ifelse(x > 0, 1,0)
+  y <- factor(y, levels=c(0,1), labels=c("No", "Yes"))
+  y
+}
+datasetNB <- apply(dtm, 2, convert_count)
+dataset = as.data.frame(as.matrix(datasetNB))
+dataset$Class = df$sentiment
+dataset<-na.omit(dataset)
+str(dataset$Class)
+head(dataset)
+dim(dataset)
+set.seed(222)
+split = sample(2,nrow(dataset),prob = c(0.75,0.25),replace = TRUE)
+train_set = dataset[split == 1,]
+test_set = dataset[split == 2,] 
+
+prop.table(table(train_set$Class))
+prop.table(table(test_set$Class))
+library(e1071)
+svm_classifier <- svm(Class~., data=train_set,type = "C")
+svm_classifier
+svm_pred = predict(svm_classifier,test_set)
+confusionMatrix(svm_pred,test_set$Class)
